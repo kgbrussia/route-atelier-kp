@@ -153,6 +153,12 @@ RATE_NOTE = {
     "en": "Converted at the Bank of Russia rate of {date}: 1 USD = {rate} RUB. Rouble prices are shown for reference; the booking-date rate applies.",
     "ar": "تم التحويل بسعر البنك المركزي الروسي بتاريخ {date}: 1 درهم إماراتي = {rate} روبل. الأسعار بالروبل للمرجع، ويُطبَّق سعر يوم الحجز.",
 }
+RATE_NOTE_MANUAL = {
+    "zh": "按经理设定的汇率换算：1 人民币 = {rate} 卢布。卢布价格仅供参考，结算以预订时汇率为准。",
+    "en": "Converted at the manager's rate: 1 CNY = {rate} RUB. Rouble prices are shown for reference; the booking-date rate applies.",
+    "ar": "تم التحويل بسعر الصرف الذي حدده المدير: 1 يوان = {rate} روبل.",
+}
+_ctx = threading.local()
 _rates = {"at": 0, "data": None}
 _rates_lock = threading.Lock()
 
@@ -174,12 +180,17 @@ def get_rates():
         return data
 
 
+def current_rates():
+    """Курсы для текущего КП: ЦБ РФ, а юань — по курсу менеджера, если он задан в форме."""
+    return getattr(_ctx, "rates", None) or get_rates()
+
+
 def money(rub, lang):
     """Сумма в рублях -> строка в валюте языка КП."""
     code = CURRENCY.get(lang, "RUB")
     if code == "RUB":
         return f"{int(round(rub)):,}".replace(",", "\u00a0") + "\u00a0₽"
-    n = f"{int(round(rub / get_rates()[code])):,}"
+    n = f"{int(round(rub / current_rates()[code])):,}"
     return {"USD": f"${n}", "CNY": f"¥{n}", "AED": f"{n}\u00a0AED"}[code]
 
 
@@ -221,8 +232,10 @@ def time_l(value, lang):
 def rate_note(lang):
     if lang == "ru":
         return ""
-    r = get_rates()
+    r = current_rates()
     rate = f"{r[CURRENCY[lang]]:.2f}"
+    if r.get("source") == "manager" and CURRENCY[lang] == "CNY":
+        return RATE_NOTE_MANUAL[lang].format(rate=rate)
     return RATE_NOTE[lang].format(date=r["date"], rate=rate)
 
 
@@ -346,7 +359,6 @@ def prepare(payload):
 def pick_narrator(choice, data, wishes):
     if choice in CHARACTERS:
         return choice
-    text = " ".join([str(data["client"].get("tags", "")), wishes or ""]).lower()
     rules = [("sadko", r"гастро|еда|кухн|ярмар|шопинг|рынок|сувенир|food|shop"),
              ("afanasy", r"спа|spa|релакс|отдых|завидово|комфорт"),
              ("vasilisa", r"текстил|ремесл|ремёсл|мастер|палех|ткан"),
@@ -354,7 +366,13 @@ def pick_narrator(choice, data, wishes):
              ("ilya", r"истор|юнеско|музе|кремл|белый камень|храм"),
              ("alyosha", r"актив|вертол|тройк|драйв|приключ")]
     for cid, rx in rules:
-        if re.search(rx, text):
+        if re.search(rx, (wishes or "").lower()):
+            return cid
+    focus = {"life": "bear", "food": "sadko", "culture": "alyosha"}.get(data["client"].get("focus"))
+    if focus in CHARACTERS:
+        return focus
+    for cid, rx in rules:
+        if re.search(rx, str(data["client"].get("tags", "")).lower()):
             return cid
     if int(data["client"].get("children") or 0) > 0:
         return "alyonushka"
@@ -392,6 +410,7 @@ def build_prompt(data, narrator, lang, audience, wishes):
         })
     payload = {
         "клиент": {"аудитория": audience, "людей": cl["people"], "детей": cl.get("children"), "дней": cl["days"],
+                   "тип_тура": cl.get("tour_type"), "направленность": cl.get("focus_label"),
                    "темп": cl.get("activity"), "бюджет": cl.get("budget"), "интересы": cl.get("tags"),
                    "старт": cl.get("start"), "финиш": cl.get("end"), "особые_пожелания": wishes or "нет"},
         "рассказчик": char_brief(narrator),
@@ -408,12 +427,12 @@ def build_prompt(data, narrator, lang, audience, wishes):
 1. Сказочный голос — только в полях narrator_greeting (говорит рассказчик от первого лица, 2–3 предложения, можно начать с его фирменной фразы в переводе) и host_lines (одна короткая реплика хозяина каждого города маршрута от его лица). Все остальные поля пиши деловым, ясным, продающим языком для турагента: без сказочных оборотов.
 2. Не выдумывай цены, время, расписания, вместимость, наличие мест, Halal/China Friendly сертификаты, вертолёты, лимузины и прочие услуги, которых нет в данных. Цифры цен и времени в тексты не переписывай: таблицы с ними страница покажет сама.
 3. Если особое пожелание клиента нельзя выполнить по данным (например, нужной кухни нет в городе), не обещай его. Вежливо предложи лучшую альтернативу из списка объектов и запиши это в alternatives. Если пожеланий нет или все выполнимы, alternatives может быть пустым.
-4. variants: для каждого варианта (A и B) распиши программу ровно на {cl['days']} дн. Город дня бери из маршрута, учитывай ночёвки и переезды. В пунктах дня (items) используй объекты из данных по названию, время пиши ориентировочно («09:00», «утро», «после обеда»). 4–6 пунктов в день.
+4. variants: для каждого варианта из данных ({", ".join(v["variant"] for v in data["variants"])}) распиши программу ровно на {cl['days']} дн. Город дня бери из маршрута, учитывай ночёвки и переезды. В пунктах дня (items) используй объекты из данных по названию, время пиши ориентировочно («09:00», «утро», «после обеда»). 4–6 пунктов в день.
 5. object_notes: для каждого объекта из данных (по id) — 1–2 предложения, чем он хорош для этого клиента. Только по названию, типу, уровню и тегам, без выдуманных фактов.
-6. comparison: 4–6 критериев сравнения вариантов A и B. recommended_variant и recommendation_reason — какой вариант лучше для клиента и почему.
+6. {"comparison: 4–6 критериев сравнения вариантов A и B. recommended_variant и recommendation_reason — какой вариант лучше для клиента и почему." if len(data["variants"]) > 1 else "Вариант в данных один: comparison оставь пустым, recommended_variant = A, а в recommendation_reason в 1–2 предложениях объясни, почему этот маршрут подходит клиенту."}
 7. included / not_included / to_confirm: реалистично по данным. Транспорт между городами, гид, трансферы из аэропорта и вместимость — в to_confirm или not_included.
 8. family_notes: советы для семьи и детей (если детей нет — для группы). Учитывай аудиторию: для гостей из ОАЭ — халяль, молитвенное время, приватность; для группы из Китая — гид на китайском, фото-локации, интернет, горячая вода. Отмечай, что это нужно подтвердить.
-9. title — короткое продающее название тура; subtitle — одна строка о сути; offer — 3–4 предложения продающего оффера; highlights — 4–5 пунктов; closing — 2 предложения с призывом к бронированию.
+9. Учитывай направленность тура: для «Русская еда» больше гастрономии и ресторанов, для «Русская культура» — истории и музеев, для «Русская жизнь» — повседневной жизни, рынков и прогулок. title — короткое продающее название тура; subtitle — одна строка о сути; offer — 3–4 предложения продающего оффера; highlights — 4–5 пунктов; closing — 2 предложения с призывом к бронированию.
 10. Названия объектов (отелей, ресторанов) оставляй как в данных. Названия городов переводи на язык ответа."""
 
 
@@ -474,6 +493,21 @@ def char_img(cid, kind):
 
 
 def render_kp(kp, data, narrator, lang, audience, meta):
+    rates = dict(get_rates())
+    try:
+        manual = float(data["client"].get("rate_cny") or 0)
+    except (TypeError, ValueError):
+        manual = 0
+    if manual > 0 and abs(manual - rates["CNY"]) >= 0.01:
+        rates.update(CNY=manual, source="manager")
+    _ctx.rates = rates
+    try:
+        return _render_kp(kp, data, narrator, lang, audience, meta)
+    finally:
+        _ctx.rates = None
+
+
+def _render_kp(kp, data, narrator, lang, audience, meta):
     t = L[lang]
     rtl = lang == "ar"
     cl = data["client"]
@@ -530,7 +564,8 @@ def render_kp(kp, data, narrator, lang, audience, meta):
     for v in data["variants"]:
         av = ai_vars.get(v["variant"], {})
         hosted = set()
-        is_rec = v["variant"] == rec
+        is_rec = v["variant"] == rec and len(data["variants"]) > 1
+        vlabel = f'{t["variant"]} {v["variant"]}' if len(data["variants"]) > 1 else t["route"]
         chain = " → ".join(cname(c) for c in v["sequence"])
         days_html = []
         for d in av.get("days", []):
@@ -583,7 +618,7 @@ def render_kp(kp, data, narrator, lang, audience, meta):
         parts.append(f"""
 <section class="variant {'rec' if is_rec else ''}">
   <header class="vhead">
-    <div><span class="vkick">{e(t['variant'])} {e(v['variant'])}{f' · <b>{e(t["recommended"])}</b>' if is_rec else ''}</span>
+    <div><span class="vkick">{e(vlabel)}{f' · <b>{e(t["recommended"])}</b>' if is_rec else ''}</span>
     <h2>{e(av.get('name') or v['name'])}</h2><p class="chain">{e(chain)}</p></div>
     <div class="vfacts">
       <div><b>{e(money(v['total'], lang))}</b><span>{e(t['total'])}</span></div>
@@ -605,7 +640,16 @@ def render_kp(kp, data, narrator, lang, audience, meta):
   <p class="note">{e(t['cost_note'])} {e(rate_note(lang))}</p>
 </section>""")
 
+    two = len(data["variants"]) > 1
+    if two:
+        rec_html = (f'<div class="rec-box"><b>{e(t["recommended"])}: {e(t["variant"])} {e(rec)}.</b> '
+                    f'{e(kp.get("recommendation_reason"))}</div>')
+    else:
+        rec_html = f'<div class="rec-box">{e(kp.get("recommendation_reason"))}</div>' if kp.get("recommendation_reason") else ""
     comp_rows = "".join(f'<tr><td>{e(c.get("criterion"))}</td><td>{e(c.get("a"))}</td><td>{e(c.get("b"))}</td></tr>' for c in kp.get("comparison", []))
+    compare_html = (f'<section class="block"><h3 style="margin-top:0">{e(t["compare"])}</h3><table><thead><tr>'
+                    f'<th>{e(t["criterion"])}</th><th>{e(t["variant"])} A</th><th>{e(t["variant"])} B</th></tr></thead>'
+                    f'<tbody>{comp_rows}</tbody></table></section>') if two and comp_rows else ""
     alts = kp.get("alternatives") or []
     meta_line = f'{cl["days"]} {t["days"]} · {cl["people"]} {t["people"]}' + (f' · {cl.get("children")} {t["children"]}' if int(cl.get("children") or 0) else "")
     gallery = "".join(pic(char_img(narrator, k)) for k in ("s2", "s3") if char_img(narrator, k))
@@ -687,11 +731,10 @@ footer{{color:var(--muted);font-size:12px;display:flex;justify-content:space-bet
   <section class="block"><h3 style="margin-top:0">{e(t['offer'])}</h3><p class="offer">{e(kp.get('offer'))}</p>
     <h3>{e(t['highlights'])}</h3><div class="hls">{hl}</div>
     <h3>{e(t['host'])}</h3><div class="hosts">{hosts_html}</div>
-    <div class="rec-box"><b>{e(t['recommended'])}: {e(t['variant'])} {e(rec)}.</b> {e(kp.get('recommendation_reason'))}</div>
+    {rec_html}
   </section>
   {''.join(parts)}
-  <section class="block"><h3 style="margin-top:0">{e(t['compare'])}</h3>
-    <table><thead><tr><th>{e(t['criterion'])}</th><th>{e(t['variant'])} A</th><th>{e(t['variant'])} B</th></tr></thead><tbody>{comp_rows}</tbody></table></section>
+  {compare_html}
   <section class="block"><div class="cols">
     <div><h3 style="margin-top:0">{e(t['included'])}</h3><ul>{ul(kp.get('included', []))}</ul></div>
     <div><h3 style="margin-top:0">{e(t['not_included'])}</h3><ul>{ul(kp.get('not_included', []))}</ul></div>
@@ -808,7 +851,8 @@ class Handler(SimpleHTTPRequestHandler):
         path = urlparse(self.path).path
         if path == "/api/health":
             return self.send_json({"ok": True, "claude": os.path.exists(CLAUDE), "model": MODEL, "effort": EFFORT,
-                                   "auth": bool(ACCESS_KEY), "key_ok": self.authorized()})
+                                   "auth": bool(ACCESS_KEY), "key_ok": self.authorized(),
+                                   "rates": {k: v for k, v in get_rates().items() if k in ("CNY", "USD", "AED", "date")}})
         if path == "/api/characters":
             return self.send_json({"characters": CHARACTERS, "city_host": CITY_HOST})
         if path.startswith("/api/") and not self.authorized():
