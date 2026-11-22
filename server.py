@@ -730,14 +730,13 @@ h1{{font-size:25px;margin-bottom:6px}}.subtitle{{font-size:13px;margin-bottom:10
 .narrator h3{{font-size:17px;margin-bottom:6px}}.narrator blockquote{{font-size:12.5px;line-height:1.5}}
 .gallery{{margin-top:8px}}.gallery .pic{{height:46px;width:70px}}
 section.block,section.variant{{padding:13px 15px;border-radius:12px;margin-bottom:5mm}}
-section.variant{{break-before:page}}
 h2{{font-size:19px}}h3{{font-size:10.5px;margin:14px 0 8px}}
 .offer{{font-size:13px;margin-bottom:10px}}.hl{{padding:9px 11px}}.hl p{{font-size:11px}}
 .vfacts div{{padding:7px 10px;min-width:0}}.vfacts b{{font-size:14px}}.vsum{{font-size:12px}}
 .days{{gap:8px}}.day{{grid-template-columns:118px 1fr}}.dayimg{{min-height:100px}}.daybody{{padding:9px 12px}}.day h4{{font-size:14px;margin-bottom:4px}}
 .timeline li{{grid-template-columns:66px 1fr;font-size:11px;padding:3px 0}}
 .hostline{{padding:6px 8px;margin-top:6px}}.hostline p{{font-size:11px}}
-table{{font-size:10.5px}}thead{{display:table-header-group}}td,th{{padding:5px 6px}}td p{{font-size:10.5px}}
+table{{font-size:10.5px}}thead{{display:table-header-group}}.objs th:first-child{{width:58%}}.objs td:nth-child(2),.objs td:nth-child(3){{white-space:nowrap}}td,th{{padding:5px 6px}}td p{{font-size:10.5px}}
 .hl,.host,.rec-box,.day,tr,.hostline,.closing,.narrator,.alts,.cols>div{{break-inside:avoid}}
 h2,h3,h4,.vhead{{break-after:avoid}}
 .cols{{gap:10px}}.closing{{padding:14px 16px}}.closing p{{font-size:13px}}
