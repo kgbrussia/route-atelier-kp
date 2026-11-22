@@ -286,7 +286,7 @@ select { appearance:none; background-image:linear-gradient(45deg, transparent 50
           <div class="kp-settings">
             <details id="serverBox" class="server-box">
               <summary>ИИ-сервер и ключ доступа</summary>
-              <label class="field"><span>Адрес сервера <small>пусто — этот же сайт</small></span><input id="apiInput" type="url" placeholder="https://….trycloudflare.com"></label>
+              <label class="field"><span>Адрес сервера <small>пусто — этот же сайт</small></span><input id="apiInput" type="url" placeholder="оставьте пустым — подставится сам"></label>
               <label class="field"><span>Ключ доступа</span><input id="keyInput" type="password" placeholder="выдаёт владелец сервера" autocomplete="off"></label>
               <button id="connectBtn" class="secondary-button" type="button">Подключить</button>
             </details>
@@ -472,13 +472,23 @@ select { appearance:none; background-image:linear-gradient(45deg, transparent 50
   const qs=new URLSearchParams(location.search);
   const store={get(k){try{return localStorage.getItem(k)||'';}catch(e){return '';}}, set(k,v){try{v?localStorage.setItem(k,v):localStorage.removeItem(k);}catch(e){}}};
   if(qs.get('key')) store.set('ra_key',qs.get('key'));
-  if(qs.get('api')) store.set('ra_api',qs.get('api').replace(/\/$/,''));
+  if(qs.get('api')) store.set('ra_api',qs.get('api'));
   if(qs.get('key')||qs.get('api')) history.replaceState(null,'',location.pathname);
   let API='';
   const apiUrl=(p)=>API+p;
   const apiFetch=(p,opt={})=>fetch(apiUrl(p),{...opt,headers:{...(opt.headers||{}),'X-Access-Key':store.get('ra_key')}}).then(async r=>{const j=await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.error||('HTTP '+r.status)); return j;});
+  // Адрес ИИ-сервера: только origin туннеля/сервера. Адрес самого сайта или GitHub Pages сюда не подходит.
+  function cleanApi(v){
+    v=(v||'').trim(); if(!v) return '';
+    try{ const u=new URL(v.includes('://')?v:'https://'+v);
+      const k=u.searchParams.get('key'); if(k) store.set('ra_key',k);
+      if(u.host===location.host || /github\.io$/.test(u.hostname)) return '';
+      return u.origin;
+    }catch(e){ return ''; }
+  }
   async function resolveApi(){
-    if(store.get('ra_api')) return store.get('ra_api');
+    const saved=cleanApi(store.get('ra_api')); store.set('ra_api',saved);
+    if(saved) return saved;
     if(!/github\.io$/.test(location.hostname) && location.protocol.startsWith('http')) return '';
     try{ const c=await fetch('config.json',{cache:'no-store'}).then(r=>r.json()); return (c.api||'').replace(/\/$/,''); }catch(e){ return ''; }
   }
@@ -508,7 +518,7 @@ select { appearance:none; background-image:linear-gradient(45deg, transparent 50
   }
   function showKp(url,title){ url=/^https?:/.test(url)?url:apiUrl('/'+url.replace(/^\//,'')); kpState.current=url; $('kpEmpty').hidden=true; $('kpFrame').hidden=false; $('kpFrame').src=url; $('kpToolbar').hidden=false; $('kpName').textContent=title||'Коммерческое предложение'; $('openKp').href=url; $('downloadKp').href=url; $('downloadKp').setAttribute('download',url.split('/').pop()); }
   $('downloadKp').addEventListener('click',async ev=>{ if(!kpState.current||new URL(kpState.current).origin===location.origin) return; ev.preventDefault(); try{ const b=await fetch(kpState.current).then(r=>r.blob()); const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=kpState.current.split('/').pop(); a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),2000);}catch(e){ window.open(kpState.current,'_blank'); } });
-  $('connectBtn').addEventListener('click',()=>{ store.set('ra_api',$('apiInput').value.trim().replace(/\/$/,'')); store.set('ra_key',$('keyInput').value.trim()); $('aiStatus').textContent='Проверяю ИИ…'; initAI(); });
+  $('connectBtn').addEventListener('click',()=>{ store.set('ra_key',$('keyInput').value.trim()); store.set('ra_api',cleanApi($('apiInput').value)); $('aiStatus').textContent='Проверяю ИИ…'; initAI(); });
   async function loadHistory(){
     try{ const r=await apiFetch('/api/history'); const items=r.items||[];
       $('historyList').innerHTML=items.length?items.map(i=>{const c=kpState.characters[i.narrator]; return `<div class="history-item"><button type="button" data-url="${esc(i.url)}" data-title="${esc(i.title||'')}">${c?`<img class="host-ava" src="${esc(c.images[0])}" alt="">`:''}${esc(i.title||i.file)}</button><small>${esc((i.lang||'').toUpperCase())} · ${esc(i.seconds||'?')} с</small></div>`;}).join(''):'<small style="color:#8a95a3">Пока нет</small>';
