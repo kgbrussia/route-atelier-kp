@@ -438,7 +438,8 @@ def run_claude(prompt):
         kp = json.loads(m.group(0)) if m else None
     if not kp:
         raise RuntimeError("ИИ не вернул JSON с текстами КП")
-    usage = next(iter((out.get("modelUsage") or {}).items()), (MODEL, {}))
+    # Claude Code иногда добавляет служебный вызов младшей модели; показываем ту, что сделала основную работу.
+    usage = max((out.get("modelUsage") or {}).items(), key=lambda kv: kv[1].get("outputTokens") or 0, default=(MODEL, {}))
     return kp, {"model": usage[0], "cost_usd": out.get("total_cost_usd"), "output_tokens": usage[1].get("outputTokens")}
 
 
