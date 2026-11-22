@@ -714,8 +714,35 @@ tfoot td{{font-weight:800;font-size:15px;border-bottom:0;border-top:2px solid va
 .closing{{background:var(--navy);color:#fff;border-radius:20px;padding:26px 28px;margin-bottom:22px}}.closing p{{margin:0 0 8px;font-size:16px}}.closing small{{color:#b8c4d3}}
 footer{{color:var(--muted);font-size:12px;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}}
 .printbtn{{position:fixed;bottom:18px;{'left' if rtl else 'right'}:18px;background:var(--navy);color:#fff;border:0;border-radius:12px;padding:11px 16px;font-weight:800;cursor:pointer;box-shadow:0 8px 20px rgba(0,0,0,.2)}}
-@media(max-width:720px){{.narrator{{grid-template-columns:1fr}}.narrator>.portrait{{width:100%;height:300px}}.day{{grid-template-columns:1fr}}.dayimg{{height:170px}}section.block,section.variant{{padding:18px}}table{{font-size:13px}}}}
-@media print{{body{{background:#fff}}.printbtn{{display:none}}section,article,.narrator{{break-inside:avoid}}.cover{{min-height:320px}}}}
+@media screen and (max-width:720px){{.narrator{{grid-template-columns:1fr}}.narrator>.portrait{{width:100%;height:300px}}.day{{grid-template-columns:1fr}}.dayimg{{height:170px}}section.block,section.variant{{padding:18px}}table{{font-size:13px}}}}
+@page{{size:A4;margin:11mm 10mm 13mm}}
+@media print{{
+*{{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+body{{background:#fff;font-size:11.5px;line-height:1.45}}
+.printbtn{{display:none}}
+.wrap{{max-width:none;padding:0}}
+.cover{{min-height:0;height:82mm;border-radius:14px;overflow:hidden;margin-bottom:5mm}}
+.cover .wrap{{padding:0 20px 16px}}
+.brand{{top:12px;left:20px;right:auto}}
+h1{{font-size:25px;margin-bottom:6px}}.subtitle{{font-size:13px;margin-bottom:10px}}.kicker{{font-size:10px;margin-bottom:8px}}.meta span{{font-size:10.5px;padding:4px 8px}}
+.narrator{{margin:0 0 5mm;box-shadow:none;grid-template-columns:105px 1fr;padding:12px 14px;gap:16px}}
+.narrator>.portrait{{width:105px;height:130px;border-width:3px}}
+.narrator h3{{font-size:17px;margin-bottom:6px}}.narrator blockquote{{font-size:12.5px;line-height:1.5}}
+.gallery{{margin-top:8px}}.gallery .pic{{height:46px;width:70px}}
+section.block,section.variant{{padding:13px 15px;border-radius:12px;margin-bottom:5mm}}
+section.variant{{break-before:page}}
+h2{{font-size:19px}}h3{{font-size:10.5px;margin:14px 0 8px}}
+.offer{{font-size:13px;margin-bottom:10px}}.hl{{padding:9px 11px}}.hl p{{font-size:11px}}
+.vfacts div{{padding:7px 10px;min-width:0}}.vfacts b{{font-size:14px}}.vsum{{font-size:12px}}
+.days{{gap:8px}}.day{{grid-template-columns:118px 1fr}}.dayimg{{min-height:100px}}.daybody{{padding:9px 12px}}.day h4{{font-size:14px;margin-bottom:4px}}
+.timeline li{{grid-template-columns:66px 1fr;font-size:11px;padding:3px 0}}
+.hostline{{padding:6px 8px;margin-top:6px}}.hostline p{{font-size:11px}}
+table{{font-size:10.5px}}thead{{display:table-header-group}}td,th{{padding:5px 6px}}td p{{font-size:10.5px}}
+.hl,.host,.rec-box,.day,tr,.hostline,.closing,.narrator,.alts,.cols>div{{break-inside:avoid}}
+h2,h3,h4,.vhead{{break-after:avoid}}
+.cols{{gap:10px}}.closing{{padding:14px 16px}}.closing p{{font-size:13px}}
+footer{{font-size:9px}}
+}}
 </style>
 </head>
 <body>
