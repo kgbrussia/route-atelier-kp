@@ -18,17 +18,23 @@ trap cleanup EXIT INT TERM
 
 python3 server.py & SERVER_PID=$!
 caffeinate -dimsu & CAFF_PID=$!
-cloudflared tunnel --no-autoupdate --url "http://localhost:$PORT" > "$LOG" 2>&1 & TUNNEL_PID=$!
+# HTTP/2 вместо QUIC: во многих сетях UDP до Cloudflare заблокирован.
+cloudflared tunnel --no-autoupdate --protocol http2 --url "http://localhost:$PORT" > "$LOG" 2>&1 & TUNNEL_PID=$!
 
 URL=""
 for i in {1..60}; do
   URL=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "$LOG" | head -1)
-  [[ -n "$URL" ]] && break
+  [[ -n "$URL" ]] && grep -q "Registered tunnel connection" "$LOG" && break
   sleep 1
 done
-if [[ -z "$URL" ]]; then
-  echo "Не удалось поднять туннель. Лог:"; cat "$LOG"; exit 1
+if [[ -z "$URL" ]] || ! grep -q "Registered tunnel connection" "$LOG"; then
+  echo "Не удалось поднять туннель. Лог:"; tail -20 "$LOG"; exit 1
 fi
+echo "Жду, пока адрес туннеля заработает…"
+for i in {1..45}; do
+  curl -s --max-time 5 "$URL/api/health" | grep -q '"ok"' && break
+  sleep 2
+done
 
 printf '{"api": "%s", "updated": "%s"}\n' "$URL" "$(date '+%Y-%m-%d %H:%M')" > config.json
 if git remote get-url origin >/dev/null 2>&1; then
